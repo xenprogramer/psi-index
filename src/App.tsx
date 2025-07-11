@@ -546,7 +546,7 @@ function App() {
                             <tr key={`mobile-${index}`} className="hover:bg-gray-50">
                               <td className="px-2 py-2 border border-gray-300 text-xs">{date}</td>
                               <td className="px-2 py-2 border border-gray-300 text-xs">{device}</td>
-                              <td className="px-2 py-2 border border-gray-300 text-xs truncate" title={websiteName}>{websiteName.length > 30 ? websiteName.substring(0, 30) + '...' : websiteName}</td>
+                              <td className="px-2 py-2 border border-gray-300 text-xs break-all" title={websiteName}>{websiteName}</td>
                               <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(ttfb, 'ttfb')}`}>{ttfb}</td>
                               <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(startRender, 'fcp')}`}>{startRender}</td>
                               <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(fcp, 'fcp')}`}>{fcp}</td>
@@ -636,7 +636,7 @@ function App() {
                             <tr key={`desktop-${index}`} className="hover:bg-gray-50">
                               <td className="px-2 py-2 border border-gray-300 text-xs">{date}</td>
                               <td className="px-2 py-2 border border-gray-300 text-xs">{device}</td>
-                              <td className="px-2 py-2 border border-gray-300 text-xs truncate" title={websiteName}>{websiteName.length > 30 ? websiteName.substring(0, 30) + '...' : websiteName}</td>
+                              <td className="px-2 py-2 border border-gray-300 text-xs break-all" title={websiteName}>{websiteName}</td>
                               <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(ttfb, 'ttfb')}`}>{ttfb}</td>
                               <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(startRender, 'fcp')}`}>{startRender}</td>
                               <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(fcp, 'fcp')}`}>{fcp}</td>
