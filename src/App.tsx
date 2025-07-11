@@ -262,96 +262,91 @@ function App() {
     // Add headers
     csvRows.push(headers.join(','));
     
-    // Add Mobile results section
+    // Group results by device type
     const mobileResults = results.filter(item => item.device === 'Mobile');
-    if (mobileResults.length > 0) {
-      csvRows.push(''); // Empty row for separation
-      csvRows.push('MOBILE RESULTS'); // Section header
-      csvRows.push(''); // Empty row for separation
+    const desktopResults = results.filter(item => item.device === 'Desktop');
+    
+    // Add all Mobile results first
+    mobileResults.forEach(item => {
+      const result = item.result;
+      const date = new Date(result.fetchTime).toLocaleDateString();
+      const device = item.device;
+      const websiteName = item.url;
       
-      mobileResults.forEach(item => {
-        const result = item.result;
-        const date = new Date(result.fetchTime).toLocaleDateString();
-        const device = item.device;
-        const websiteName = item.url;
-        
-        // Extract metrics from audits
-        const ttfb = (Math.random() * 0.3 + 0.15).toFixed(3);
-        const startRender = result.audits['first-contentful-paint']?.displayValue?.replace(' s', '') || '0';
-        const fcp = result.audits['first-contentful-paint']?.displayValue?.replace(' s', '') || '0';
-        const si = result.audits['speed-index']?.displayValue?.replace(' s', '') || '0';
-        const lcp = result.audits['largest-contentful-paint']?.displayValue?.replace(' s', '') || '0';
-        const cls = result.audits['cumulative-layout-shift']?.displayValue || '0';
-        const tbt = result.audits['total-blocking-time']?.displayValue?.replace(' ms', '') || '0';
-        const pageWeight = Math.floor(Math.random() * 5000 + 500);
-        const inp = Math.random() < 0.7 ? 'No Data' : (Math.random() * 0.3 + 0.05).toFixed(2);
-        const totalLoading = result.audits['interactive']?.displayValue?.replace(' s', '') || '0';
+      // Extract metrics from audits
+      const ttfb = (Math.random() * 0.3 + 0.15).toFixed(3);
+      const startRender = result.audits['first-contentful-paint']?.displayValue?.replace(' s', '') || '0';
+      const fcp = result.audits['first-contentful-paint']?.displayValue?.replace(' s', '') || '0';
+      const si = result.audits['speed-index']?.displayValue?.replace(' s', '') || '0';
+      const lcp = result.audits['largest-contentful-paint']?.displayValue?.replace(' s', '') || '0';
+      const cls = result.audits['cumulative-layout-shift']?.displayValue || '0';
+      const tbt = result.audits['total-blocking-time']?.displayValue?.replace(' ms', '') || '0';
+      const pageWeight = Math.floor(Math.random() * 5000 + 500);
+      const inp = Math.random() < 0.7 ? 'No Data' : (Math.random() * 0.3 + 0.05).toFixed(2);
+      const totalLoading = result.audits['interactive']?.displayValue?.replace(' s', '') || '0';
 
-        const row = [
-          date,
-          device,
-          websiteName,
-          ttfb,
-          startRender,
-          fcp,
-          si,
-          lcp,
-          cls,
-          (parseFloat(tbt) / 1000).toFixed(3),
-          pageWeight.toString(),
-          inp,
-          totalLoading
-        ];
+      const row = [
+        date,
+        device,
+        websiteName,
+        ttfb,
+        startRender,
+        fcp,
+        si,
+        lcp,
+        cls,
+        (parseFloat(tbt) / 1000).toFixed(3),
+        pageWeight.toString(),
+        inp,
+        totalLoading
+      ];
 
-        csvRows.push(row.join(','));
-      });
+      csvRows.push(row.join(','));
+    });
+    
+    // Add empty rows for separation between Mobile and Desktop results
+    if (mobileResults.length > 0 && desktopResults.length > 0) {
+      csvRows.push(''); // Empty row
+      csvRows.push(''); // Another empty row for clear separation
     }
     
-    // Add Desktop results section
-    const desktopResults = results.filter(item => item.device === 'Desktop');
-    if (desktopResults.length > 0) {
-      csvRows.push(''); // Empty row for separation
-      csvRows.push(''); // Additional empty row for more separation
-      csvRows.push('DESKTOP RESULTS'); // Section header
-      csvRows.push(''); // Empty row for separation
+    // Add all Desktop results after Mobile results
+    desktopResults.forEach(item => {
+      const result = item.result;
+      const date = new Date(result.fetchTime).toLocaleDateString();
+      const device = item.device;
+      const websiteName = item.url;
+      
+      // Extract metrics from audits (Desktop optimized values)
+      const ttfb = (Math.random() * 0.2 + 0.1).toFixed(3);
+      const startRender = result.audits['first-contentful-paint']?.displayValue?.replace(' s', '') || '0';
+      const fcp = result.audits['first-contentful-paint']?.displayValue?.replace(' s', '') || '0';
+      const si = result.audits['speed-index']?.displayValue?.replace(' s', '') || '0';
+      const lcp = result.audits['largest-contentful-paint']?.displayValue?.replace(' s', '') || '0';
+      const cls = result.audits['cumulative-layout-shift']?.displayValue || '0';
+      const tbt = result.audits['total-blocking-time']?.displayValue?.replace(' ms', '') || '0';
+      const pageWeight = Math.floor(Math.random() * 6000 + 1000);
+      const inp = Math.random() < 0.5 ? 'No Data' : (Math.random() * 0.2 + 0.03).toFixed(2);
+      const totalLoading = result.audits['interactive']?.displayValue?.replace(' s', '') || '0';
 
-      desktopResults.forEach(item => {
-        const result = item.result;
-        const date = new Date(result.fetchTime).toLocaleDateString();
-        const device = item.device;
-        const websiteName = item.url;
-        
-        // Extract metrics from audits (Desktop optimized values)
-        const ttfb = (Math.random() * 0.2 + 0.1).toFixed(3);
-        const startRender = result.audits['first-contentful-paint']?.displayValue?.replace(' s', '') || '0';
-        const fcp = result.audits['first-contentful-paint']?.displayValue?.replace(' s', '') || '0';
-        const si = result.audits['speed-index']?.displayValue?.replace(' s', '') || '0';
-        const lcp = result.audits['largest-contentful-paint']?.displayValue?.replace(' s', '') || '0';
-        const cls = result.audits['cumulative-layout-shift']?.displayValue || '0';
-        const tbt = result.audits['total-blocking-time']?.displayValue?.replace(' ms', '') || '0';
-        const pageWeight = Math.floor(Math.random() * 6000 + 1000);
-        const inp = Math.random() < 0.5 ? 'No Data' : (Math.random() * 0.2 + 0.03).toFixed(2);
-        const totalLoading = result.audits['interactive']?.displayValue?.replace(' s', '') || '0';
+      const row = [
+        date,
+        device,
+        websiteName,
+        ttfb,
+        startRender,
+        fcp,
+        si,
+        lcp,
+        cls,
+        (parseFloat(tbt) / 1000).toFixed(3),
+        pageWeight.toString(),
+        inp,
+        totalLoading
+      ];
 
-        const row = [
-          date,
-          device,
-          websiteName,
-          ttfb,
-          startRender,
-          fcp,
-          si,
-          lcp,
-          cls,
-          (parseFloat(tbt) / 1000).toFixed(3),
-          pageWeight.toString(),
-          inp,
-          totalLoading
-        ];
-
-        csvRows.push(row.join(','));
-      });
-    }
+      csvRows.push(row.join(','));
+    });
 
     return csvRows.join('\n');
   };
