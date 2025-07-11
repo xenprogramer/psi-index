@@ -246,16 +246,49 @@ function App() {
       'Device',
       'Website Name',
       'Time to First Byte',
+      'TTFB Status',
       'Start Render',
+      'Start Render Status',
       'First Contentful Paint',
+      'FCP Status',
       'Speed Index',
+      'Speed Index Status',
       'Largest Contentful Paint',
+      'LCP Status',
       'Cumulative Layout Shift',
+      'CLS Status',
       'Total Blocking Time',
+      'TBT Status',
       'Page Weight',
+      'Page Weight Status',
       'Interaction to Next Paint (INP)',
-      'Total Loading First View'
+      'Total Loading First View',
+      'Total Loading Status'
     ];
+
+    // Helper function to get performance status
+    const getPerformanceStatus = (value: string, metric: string): string => {
+      const numValue = parseFloat(value);
+      if (isNaN(numValue)) return 'N/A';
+      
+      switch (metric) {
+        case 'fcp':
+        case 'lcp':
+        case 'si':
+        case 'tti':
+          return numValue < 2.5 ? 'Good' : numValue < 4.0 ? 'Average' : 'Poor';
+        case 'cls':
+          return numValue < 0.1 ? 'Good' : numValue < 0.25 ? 'Average' : 'Poor';
+        case 'tbt':
+          return numValue < 200 ? 'Good' : numValue < 600 ? 'Average' : 'Poor';
+        case 'ttfb':
+          return numValue < 0.2 ? 'Good' : numValue < 0.5 ? 'Average' : 'Poor';
+        case 'pageWeight':
+          return numValue < 1000 ? 'Good' : numValue < 3000 ? 'Average' : 'Poor';
+        default:
+          return 'N/A';
+      }
+    };
 
     const csvRows = [];
     
@@ -290,15 +323,24 @@ function App() {
         device,
         websiteName,
         ttfb,
+        getPerformanceStatus(ttfb, 'ttfb'),
         startRender,
+        getPerformanceStatus(startRender, 'fcp'),
         fcp,
+        getPerformanceStatus(fcp, 'fcp'),
         si,
+        getPerformanceStatus(si, 'si'),
         lcp,
+        getPerformanceStatus(lcp, 'lcp'),
         cls,
+        getPerformanceStatus(cls, 'cls'),
         (parseFloat(tbt) / 1000).toFixed(3),
+        getPerformanceStatus((parseFloat(tbt) / 1000).toString(), 'tbt'),
         pageWeight.toString(),
+        getPerformanceStatus(pageWeight.toString(), 'pageWeight'),
         inp,
-        totalLoading
+        totalLoading,
+        getPerformanceStatus(totalLoading, 'tti')
       ];
 
       csvRows.push(row.join(','));
@@ -334,15 +376,24 @@ function App() {
         device,
         websiteName,
         ttfb,
+        getPerformanceStatus(ttfb, 'ttfb'),
         startRender,
+        getPerformanceStatus(startRender, 'fcp'),
         fcp,
+        getPerformanceStatus(fcp, 'fcp'),
         si,
+        getPerformanceStatus(si, 'si'),
         lcp,
+        getPerformanceStatus(lcp, 'lcp'),
         cls,
+        getPerformanceStatus(cls, 'cls'),
         (parseFloat(tbt) / 1000).toFixed(3),
+        getPerformanceStatus((parseFloat(tbt) / 1000).toString(), 'tbt'),
         pageWeight.toString(),
+        getPerformanceStatus(pageWeight.toString(), 'pageWeight'),
         inp,
-        totalLoading
+        totalLoading,
+        getPerformanceStatus(totalLoading, 'tti')
       ];
 
       csvRows.push(row.join(','));
