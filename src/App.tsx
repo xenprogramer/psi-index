@@ -429,7 +429,7 @@ function App() {
         <div className="text-center mb-10">
           <div className="flex items-center justify-center mb-4">
             <Globe className="h-12 w-12 text-blue-600 mr-3" />
-            <h1 className="text-4xl font-bold text-gray-900">Page Spped Insight</h1>
+            <h1 className="text-4xl font-bold text-gray-900">Page Speed Insight</h1>
           </div>
           {/* <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Analyze your website's performance and SEO metrics using Google Lighthouse technology
