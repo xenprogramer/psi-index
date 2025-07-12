@@ -1,9 +1,48 @@
 import React from 'react'
-import { Globe } from 'lucide-react'
+import { BarChart3, Globe, Zap, Shield, Search, TrendingUp } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 export function Workspace() {
   const { profile } = useAuth()
+
+  const features = [
+    {
+      icon: BarChart3,
+      title: 'Performance Analysis',
+      description: 'Comprehensive website performance metrics and insights',
+      color: 'bg-blue-500'
+    },
+    {
+      icon: Zap,
+      title: 'Speed Optimization',
+      description: 'Identify and fix performance bottlenecks',
+      color: 'bg-yellow-500'
+    },
+    {
+      icon: Shield,
+      title: 'Security Audit',
+      description: 'Check for security vulnerabilities and best practices',
+      color: 'bg-green-500'
+    },
+    {
+      icon: Search,
+      title: 'SEO Analysis',
+      description: 'Optimize your website for search engines',
+      color: 'bg-purple-500'
+    },
+    {
+      icon: Globe,
+      title: 'Accessibility Check',
+      description: 'Ensure your website is accessible to everyone',
+      color: 'bg-indigo-500'
+    },
+    {
+      icon: TrendingUp,
+      title: 'Performance Tracking',
+      description: 'Monitor your website performance over time',
+      color: 'bg-pink-500'
+    }
+  ]
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -33,6 +72,28 @@ export function Workspace() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {features.map((feature, index) => {
+          const Icon = feature.icon
+          return (
+            <div
+              key={index}
+              className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer group"
+            >
+              <div className={`w-12 h-12 ${feature.color} rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                <Icon className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {feature.title}
+              </h3>
+              <p className="text-gray-600 text-sm">
+                {feature.description}
+              </p>
+            </div>
+          )
+        })}
       </div>
 
       <div className="mt-12 bg-gray-50 rounded-xl p-8">

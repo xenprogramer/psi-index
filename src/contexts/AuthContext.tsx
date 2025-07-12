@@ -22,94 +22,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let mounted = true
-
-    const initializeAuth = async () => {
-      try {
-        // Set a maximum timeout for initialization
-        const timeoutId = setTimeout(() => {
-          if (mounted) {
-            console.log('Auth initialization timeout, proceeding without session')
-            setLoading(false)
-          }
-        }, 3000)
-
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        clearTimeout(timeoutId)
-        
-        if (!mounted) return
-
-        if (error) {
-          console.error('Session error:', error)
-          setLoading(false)
-          return
-        }
-        
-        setSession(session)
-        setUser(session?.user ?? null)
-        
-        if (session?.user) {
-          // Create a simple profile without database dependency
-          const simpleProfile: Profile = {
-            id: session.user.id,
-            email: session.user.email || '',
-            full_name: session.user.email?.split('@')[0] || 'User',
-            avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(session.user.email || 'user')}`,
-            created_at: new Date().toISOString()
-          }
-          setProfile(simpleProfile)
-        }
-        
-        setLoading(false)
-      } catch (error) {
-        console.error('Auth initialization error:', error)
-        if (mounted) {
-          setLoading(false)
-        }
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        fetchProfile(session.user.id)
       }
-    }
-
-    initializeAuth()
+      setLoading(false)
+    })
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return
+        setSession(session)
+        setUser(session?.user ?? null)
         
-        try {
-          setSession(session)
-          setUser(session?.user ?? null)
-          
-          if (session?.user) {
-            // Create a simple profile without database dependency
-            const simpleProfile: Profile = {
-              id: session.user.id,
-              email: session.user.email || '',
-              full_name: session.user.email?.split('@')[0] || 'User',
-              avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(session.user.email || 'user')}`,
-              created_at: new Date().toISOString()
-            }
-            setProfile(simpleProfile)
-          } else {
-            setProfile(null)
-          }
-          
-          setLoading(false)
-        } catch (error) {
-          console.error('Auth state change error:', error)
-          if (mounted) {
-            setLoading(false)
-          }
+        if (session?.user) {
+          await fetchProfile(session.user.id)
+        } else {
+          setProfile(null)
         }
+        setLoading(false)
       }
     )
 
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
-    }
+    return () => subscription.unsubscribe()
   }, [])
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching profile:', error)
+        return
+      }
+
+      if (data) {
+        setProfile(data)
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error)
+    }
+  }
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -120,10 +80,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
     })
+
+    if (!error && data.user) {
+      // Create profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: data.user.id,
+            email: data.user.email,
+            full_name: fullName,
+            avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fullName)}`,
+          },
+        ])
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError)
+      }
+    }
+
     return { error }
   }
 
@@ -134,10 +113,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error('No user logged in') }
 
-    // Update local state immediately
-    setProfile(prev => prev ? { ...prev, ...updates } : null)
-    
-    return { error: null }
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
+
+    if (!error) {
+      setProfile(prev => prev ? { ...prev, ...updates } : null)
+    }
+
+    return { error }
   }
 
   const value = {
