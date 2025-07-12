@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Search, Globe, Clock, TrendingUp, AlertCircle, CheckCircle, Loader2, Plus, X, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Gauge, Clock, TrendingUp, AlertCircle, CheckCircle, Loader2, Plus, X, Download, Save, Edit3, Trash2, Check, BookmarkPlus } from 'lucide-react';
 
 interface PerformanceResult {
   categories: {
@@ -25,6 +25,20 @@ interface PerformanceResult {
   finalUrl: string;
 }
 
+interface StoredResult {
+  url: string;
+  device: 'Mobile' | 'Desktop';
+  totalLoadingTime: number;
+  timestamp: string;
+}
+
+interface SavedUrl {
+  id: string;
+  name: string;
+  url: string;
+  selected: boolean;
+}
+
 interface TableRow {
   metric: string;
   value: string | number;
@@ -34,9 +48,137 @@ interface TableRow {
 
 function App() {
   const [urls, setUrls] = useState<string[]>(['']);
+  const [savedUrls, setSavedUrls] = useState<SavedUrl[]>([]);
+  const [showSavedUrls, setShowSavedUrls] = useState(false);
+  const [editingUrl, setEditingUrl] = useState<string | null>(null);
+  const [newUrlName, setNewUrlName] = useState('');
+  const [newUrlAddress, setNewUrlAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<{ url: string; result: PerformanceResult; device: 'Mobile' | 'Desktop' }[]>([]);
   const [error, setError] = useState('');
+  const [previousResults, setPreviousResults] = useState<StoredResult[]>([]);
+
+  // Load previous results from localStorage on component mount
+  useEffect(() => {
+    // Load saved URLs
+    const loadSavedUrls = () => {
+      try {
+        const stored = localStorage.getItem('pageSpeedSavedUrls');
+        if (stored) {
+          const parsedUrls = JSON.parse(stored);
+          setSavedUrls(parsedUrls);
+        }
+      } catch (error) {
+        console.error('Error loading saved URLs:', error);
+        setSavedUrls([]);
+      }
+    };
+
+    const loadPreviousResults = () => {
+      try {
+        const stored = localStorage.getItem('pageSpeedPreviousResults');
+        if (stored) {
+          const parsedResults = JSON.parse(stored);
+          console.log('Loaded previous results:', parsedResults);
+          setPreviousResults(parsedResults);
+        }
+      } catch (error) {
+        console.error('Error loading previous results:', error);
+        setPreviousResults([]);
+      }
+    };
+    
+    loadSavedUrls();
+    loadPreviousResults();
+  }, []);
+
+  // Save current results as previous results for next comparison
+  const savePreviousResults = (currentResults: { url: string; result: PerformanceResult; device: 'Mobile' | 'Desktop' }[]) => {
+    try {
+      const newStoredResults: StoredResult[] = currentResults.map(item => {
+        const totalLoadingTime = parseFloat(item.result.audits['interactive']?.displayValue?.replace(' s', '') || '0');
+        return {
+          url: item.url,
+          device: item.device,
+          totalLoadingTime: totalLoadingTime,
+          timestamp: item.result.fetchTime
+        };
+      });
+      
+      // Get existing results from localStorage
+      const existingStored = localStorage.getItem('pageSpeedPreviousResults');
+      let existingResults: StoredResult[] = [];
+      if (existingStored) {
+        existingResults = JSON.parse(existingStored);
+      }
+      
+      // Merge with existing results, updating existing entries
+      const updatedResults = [...existingResults];
+      newStoredResults.forEach(newResult => {
+        const existingIndex = updatedResults.findIndex(
+          existing => existing.url === newResult.url && existing.device === newResult.device
+        );
+        if (existingIndex >= 0) {
+          // Keep the old result as previous, don't overwrite immediately
+          console.log(`Found existing result for ${newResult.url} ${newResult.device}:`, updatedResults[existingIndex]);
+        } else {
+          updatedResults.push(newResult);
+        }
+      });
+      
+      console.log('Saving results for next time:', newStoredResults);
+      // Save current results for next comparison
+      setTimeout(() => {
+        const finalResults = [...existingResults];
+        newStoredResults.forEach(newResult => {
+          const existingIndex = finalResults.findIndex(
+            existing => existing.url === newResult.url && existing.device === newResult.device
+          );
+          if (existingIndex >= 0) {
+            finalResults[existingIndex] = newResult;
+          } else {
+            finalResults.push(newResult);
+          }
+        });
+        localStorage.setItem('pageSpeedPreviousResults', JSON.stringify(finalResults));
+        console.log('Updated localStorage with new results');
+      }, 1000);
+      const results = saved ? JSON.parse(saved) : [];
+      console.log('Loading previous results from localStorage:', results);
+      return results;
+    } catch (error) {
+      console.error('Error saving previous results:', error);
+    }
+  };
+
+  // Function to get previous result for comparison
+  const getPreviousResult = (url: string, device: 'Mobile' | 'Desktop'): number | null => {
+    console.log(`Looking for previous result: ${url} ${device}`);
+    console.log('Available previous results:', previousResults);
+    const previous = previousResults.find(
+      result => result.url === url && result.device === device
+    );
+    const result = previous ? previous.totalLoadingTime : null;
+    console.log(`Previous result found:`, result);
+    return result;
+  };
+
+  // Function to calculate difference
+  const calculateDifference = (current: number, previous: number | null): string => {
+    console.log(`Calculating difference: previous=${previous}, current=${current}`);
+    if (previous === null) return 'N/A';
+    const diff = previous - current; // Previous - Current (positive means improvement)
+    const result = diff > 0 ? `+${diff.toFixed(3)}` : diff.toFixed(3);
+    console.log(`Difference calculated: ${result}`);
+    return result;
+  };
+
+  // Function to get difference color
+  const getDifferenceColor = (current: number, previous: number | null): string => {
+    if (previous === null) return 'text-gray-500';
+    const diff = previous - current;
+    return diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-600';
+  };
 
   const generateMockResults = (url: string, device: 'Mobile' | 'Desktop'): PerformanceResult => {
     // Desktop generally performs better than mobile
@@ -154,6 +296,7 @@ function App() {
     setResults([]);
 
     try {
+      console.log('Saving results to localStorage:', results);
       const analysisResults = [];
       
       // Analyze each URL in both mobile and desktop modes
@@ -170,6 +313,10 @@ function App() {
         analysisResults.push({ url: url.trim(), result: desktopResults, device: 'Desktop' });
         setResults([...analysisResults]);
       }
+      
+      // Save current results as previous results for next comparison
+      savePreviousResults(analysisResults);
+      
     } catch (err) {
       console.error('Analysis error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while analyzing the website');
@@ -246,49 +393,17 @@ function App() {
       'Device',
       'Website Name',
       'Time to First Byte',
-      'TTFB Status',
       'Start Render',
-      'Start Render Status',
       'First Contentful Paint',
-      'FCP Status',
       'Speed Index',
-      'Speed Index Status',
       'Largest Contentful Paint',
-      'LCP Status',
       'Cumulative Layout Shift',
-      'CLS Status',
       'Total Blocking Time',
-      'TBT Status',
       'Page Weight',
-      'Page Weight Status',
       'Interaction to Next Paint (INP)',
       'Total Loading First View',
-      'Total Loading Status'
+      'Difference (Previous - Current)'
     ];
-
-    // Helper function to get performance status
-    const getPerformanceStatus = (value: string, metric: string): string => {
-      const numValue = parseFloat(value);
-      if (isNaN(numValue)) return 'N/A';
-      
-      switch (metric) {
-        case 'fcp':
-        case 'lcp':
-        case 'si':
-        case 'tti':
-          return numValue < 2.5 ? 'Good' : numValue < 4.0 ? 'Average' : 'Poor';
-        case 'cls':
-          return numValue < 0.1 ? 'Good' : numValue < 0.25 ? 'Average' : 'Poor';
-        case 'tbt':
-          return numValue < 200 ? 'Good' : numValue < 600 ? 'Average' : 'Poor';
-        case 'ttfb':
-          return numValue < 0.2 ? 'Good' : numValue < 0.5 ? 'Average' : 'Poor';
-        case 'pageWeight':
-          return numValue < 1000 ? 'Good' : numValue < 3000 ? 'Average' : 'Poor';
-        default:
-          return 'N/A';
-      }
-    };
 
     const csvRows = [];
     
@@ -317,30 +432,25 @@ function App() {
       const pageWeight = Math.floor(Math.random() * 5000 + 500);
       const inp = Math.random() < 0.7 ? 'No Data' : (Math.random() * 0.3 + 0.05).toFixed(2);
       const totalLoading = result.audits['interactive']?.displayValue?.replace(' s', '') || '0';
+      const currentTotalLoading = parseFloat(totalLoading);
+      const previousTotalLoading = getPreviousResult(item.url, item.device);
+      const difference = calculateDifference(currentTotalLoading, previousTotalLoading);
 
       const row = [
         date,
         device,
         websiteName,
         ttfb,
-        getPerformanceStatus(ttfb, 'ttfb'),
         startRender,
-        getPerformanceStatus(startRender, 'fcp'),
         fcp,
-        getPerformanceStatus(fcp, 'fcp'),
         si,
-        getPerformanceStatus(si, 'si'),
         lcp,
-        getPerformanceStatus(lcp, 'lcp'),
         cls,
-        getPerformanceStatus(cls, 'cls'),
         (parseFloat(tbt) / 1000).toFixed(3),
-        getPerformanceStatus((parseFloat(tbt) / 1000).toString(), 'tbt'),
         pageWeight.toString(),
-        getPerformanceStatus(pageWeight.toString(), 'pageWeight'),
         inp,
         totalLoading,
-        getPerformanceStatus(totalLoading, 'tti')
+        difference
       ];
 
       csvRows.push(row.join(','));
@@ -370,30 +480,25 @@ function App() {
       const pageWeight = Math.floor(Math.random() * 6000 + 1000);
       const inp = Math.random() < 0.5 ? 'No Data' : (Math.random() * 0.2 + 0.03).toFixed(2);
       const totalLoading = result.audits['interactive']?.displayValue?.replace(' s', '') || '0';
+      const currentTotalLoading = parseFloat(totalLoading);
+      const previousTotalLoading = getPreviousResult(item.url, item.device);
+      const difference = calculateDifference(currentTotalLoading, previousTotalLoading);
 
       const row = [
         date,
         device,
         websiteName,
         ttfb,
-        getPerformanceStatus(ttfb, 'ttfb'),
         startRender,
-        getPerformanceStatus(startRender, 'fcp'),
         fcp,
-        getPerformanceStatus(fcp, 'fcp'),
         si,
-        getPerformanceStatus(si, 'si'),
         lcp,
-        getPerformanceStatus(lcp, 'lcp'),
         cls,
-        getPerformanceStatus(cls, 'cls'),
         (parseFloat(tbt) / 1000).toFixed(3),
-        getPerformanceStatus((parseFloat(tbt) / 1000).toString(), 'tbt'),
         pageWeight.toString(),
-        getPerformanceStatus(pageWeight.toString(), 'pageWeight'),
         inp,
         totalLoading,
-        getPerformanceStatus(totalLoading, 'tti')
+        difference
       ];
 
       csvRows.push(row.join(','));
@@ -422,14 +527,106 @@ function App() {
     document.body.removeChild(link);
   };
 
+  // Add missing functions for saved URLs management
+  const addSavedUrl = () => {
+    if (!newUrlName.trim() || !newUrlAddress.trim()) {
+      setError('Please enter both URL name and address');
+      return;
+    }
+
+    try {
+      new URL(newUrlAddress.trim());
+    } catch {
+      setError('Please enter a valid URL');
+      return;
+    }
+
+    const newUrl: SavedUrl = {
+      id: Date.now().toString(),
+      name: newUrlName.trim(),
+      url: newUrlAddress.trim(),
+      selected: false
+    };
+
+    const updatedUrls = [...savedUrls, newUrl];
+    setSavedUrls(updatedUrls);
+    localStorage.setItem('pageSpeedSavedUrls', JSON.stringify(updatedUrls));
+    
+    setNewUrlName('');
+    setNewUrlAddress('');
+    setError('');
+  };
+
+  const removeSavedUrl = (id: string) => {
+    const updatedUrls = savedUrls.filter(url => url.id !== id);
+    setSavedUrls(updatedUrls);
+    localStorage.setItem('pageSpeedSavedUrls', JSON.stringify(updatedUrls));
+  };
+
+  const editSavedUrl = (id: string, newName: string, newUrl: string) => {
+    if (!newName.trim() || !newUrl.trim()) {
+      setError('Please enter both URL name and address');
+      return;
+    }
+
+    try {
+      new URL(newUrl.trim());
+    } catch {
+      setError('Please enter a valid URL');
+      return;
+    }
+
+    const updatedUrls = savedUrls.map(url => 
+      url.id === id 
+        ? { ...url, name: newName.trim(), url: newUrl.trim() }
+        : url
+    );
+    setSavedUrls(updatedUrls);
+    localStorage.setItem('pageSpeedSavedUrls', JSON.stringify(updatedUrls));
+    setEditingUrl(null);
+    setError('');
+  };
+
+  const toggleUrlSelection = (id: string) => {
+    const updatedUrls = savedUrls.map(url => 
+      url.id === id 
+        ? { ...url, selected: !url.selected }
+        : url
+    );
+    setSavedUrls(updatedUrls);
+    localStorage.setItem('pageSpeedSavedUrls', JSON.stringify(updatedUrls));
+  };
+
+  const selectAllUrls = () => {
+    const updatedUrls = savedUrls.map(url => ({ ...url, selected: true }));
+    setSavedUrls(updatedUrls);
+    localStorage.setItem('pageSpeedSavedUrls', JSON.stringify(updatedUrls));
+  };
+
+  const deselectAllUrls = () => {
+    const updatedUrls = savedUrls.map(url => ({ ...url, selected: false }));
+    setSavedUrls(updatedUrls);
+    localStorage.setItem('pageSpeedSavedUrls', JSON.stringify(updatedUrls));
+  };
+
+  const loadSelectedUrls = () => {
+    const selectedUrls = savedUrls.filter(url => url.selected).map(url => url.url);
+    if (selectedUrls.length === 0) {
+      setError('Please select at least one URL to load');
+      return;
+    }
+    setUrls(selectedUrls);
+    setError('');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="max-w-full mx-auto px-6 py-8">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {/* Header */}
-        <div className="text-center mb-10">
-          <div className="flex items-center justify-center mb-4">
-            <Globe className="h-12 w-12 text-blue-600 mr-3" />
-            <h1 className="text-4xl font-bold text-gray-900">Page Speed Insight</h1>
+        <div className="text-center mb-6 sm:mb-8 lg:mb-10">
+          <div className="flex flex-col sm:flex-row items-center justify-center mb-4">
+            <Gauge className="h-10 w-10 sm:h-12 sm:w-12 text-blue-600 mb-2 sm:mb-0 sm:mr-3" />
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Page Speed Insight</h1>
           </div>
           {/* <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Analyze your website's performance and SEO metrics using Google Lighthouse technology
@@ -437,38 +634,182 @@ function App() {
         </div>
 
         {/* Input Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6 sm:mb-8">
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Website URLs to Analyze</h3>
-              <button
-                onClick={addUrlField}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add URL
-              </button>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900">Website URLs to Analyze</h3>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={() => setShowSavedUrls(!showSavedUrls)}
+                  className="w-full sm:w-auto px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center justify-center"
+                >
+                  <BookmarkPlus className="h-4 w-4 mr-2" />
+                  Manage URLs
+                </button>
+                <button
+                  onClick={addUrlField}
+                  className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add URL
+                </button>
+              </div>
             </div>
+
+            {/* Saved URLs Management Panel */}
+            {showSavedUrls && (
+              <div className="bg-gray-50 rounded-lg p-4 border-2 border-purple-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                  <h4 className="text-lg font-semibold text-gray-800">Saved URLs</h4>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={selectAllUrls}
+                      className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition-colors"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={deselectAllUrls}
+                      className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors"
+                    >
+                      Deselect All
+                    </button>
+                    <button
+                      onClick={loadSelectedUrls}
+                      className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition-colors"
+                    >
+                      Load Selected
+                    </button>
+                  </div>
+                </div>
+
+                {/* Add New URL Form */}
+                <div className="bg-white rounded-lg p-4 mb-4 border border-gray-200">
+                  <h5 className="font-medium text-gray-700 mb-3">Add New URL</h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <input
+                      type="text"
+                      value={newUrlName}
+                      onChange={(e) => setNewUrlName(e.target.value)}
+                      placeholder="URL Name (e.g., My Website)"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                    />
+                    <input
+                      type="url"
+                      value={newUrlAddress}
+                      onChange={(e) => setNewUrlAddress(e.target.value)}
+                      placeholder="https://example.com"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                    />
+                    <button
+                      onClick={addSavedUrl}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center justify-center text-sm"
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Save URL
+                    </button>
+                  </div>
+                </div>
+
+                {/* Saved URLs List */}
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {savedUrls.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">No saved URLs yet. Add some above!</p>
+                  ) : (
+                    savedUrls.map((savedUrl) => (
+                      <div key={savedUrl.id} className="bg-white rounded-lg p-3 border border-gray-200 flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={savedUrl.selected}
+                          onChange={() => toggleUrlSelection(savedUrl.id)}
+                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                        />
+                        
+                        {editingUrl === savedUrl.id ? (
+                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              defaultValue={savedUrl.name}
+                              id={`edit-name-${savedUrl.id}`}
+                              className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                            />
+                            <input
+                              type="url"
+                              defaultValue={savedUrl.url}
+                              id={`edit-url-${savedUrl.id}`}
+                              className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800 text-sm">{savedUrl.name}</div>
+                            <div className="text-gray-600 text-xs break-all">{savedUrl.url}</div>
+                          </div>
+                        )}
+                        
+                        <div className="flex gap-1">
+                          {editingUrl === savedUrl.id ? (
+                            <>
+                              <button
+                                onClick={() => {
+                                  const nameInput = document.getElementById(`edit-name-${savedUrl.id}`) as HTMLInputElement;
+                                  const urlInput = document.getElementById(`edit-url-${savedUrl.id}`) as HTMLInputElement;
+                                  editSavedUrl(savedUrl.id, nameInput.value, urlInput.value);
+                                }}
+                                className="p-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                              >
+                                <Check className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingUrl(null)}
+                                className="p-1 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => setEditingUrl(savedUrl.id)}
+                                className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                              >
+                                <Edit3 className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={() => removeSavedUrl(savedUrl.id)}
+                                className="p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
             
             {urls.map((url, index) => (
-              <div key={index} className="flex gap-3">
+              <div key={index} className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <Search className="absolute left-3 top-3 h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                   <input
                     type="url"
                     value={url}
                     onChange={(e) => updateUrl(index, e.target.value)}
                     placeholder={`Enter website URL ${index + 1} (e.g., https://example.com)`}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-lg"
+                    className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm sm:text-base lg:text-lg"
                     onKeyPress={(e) => e.key === 'Enter' && analyzeWebsite()}
                   />
                 </div>
                 {urls.length > 1 && (
                   <button
                     onClick={() => removeUrlField(index)}
-                    className="px-3 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    className="w-full sm:w-auto px-3 py-2 sm:py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center"
                   >
-                    <X className="h-5 w-5" />
+                    <X className="h-4 w-4 sm:h-5 sm:w-5" />
                   </button>
                 )}
               </div>
@@ -477,16 +818,16 @@ function App() {
             <button
               onClick={analyzeWebsite}
               disabled={loading}
-              className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold flex items-center justify-center min-w-[140px]"
+              className="w-full sm:w-auto px-6 sm:px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold flex items-center justify-center text-sm sm:text-base"
             >
               {loading ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin mr-2" />
                   Analyzing {urls.filter(u => u.trim()).length} URL{urls.filter(u => u.trim()).length !== 1 ? 's' : ''}...
                 </>
               ) : (
                 <>
-                  <TrendingUp className="h-5 w-5 mr-2" />
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                   Analyze {urls.filter(u => u.trim()).length} URL{urls.filter(u => u.trim()).length !== 1 ? 's' : ''}
                 </>
               )}
@@ -496,32 +837,32 @@ function App() {
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 sm:mb-6">
             <div className="flex items-center">
-              <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-              <span className="text-red-700">{error}</span>
+              <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 mr-2 flex-shrink-0" />
+              <span className="text-sm sm:text-base text-red-700 break-words">{error}</span>
             </div>
           </div>
         )}
 
         {/* Results Section */}
         {results.length > 0 && (
-          <div className="space-y-8 max-w-none">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">Analysis Results</h2>
+          <div className="space-y-6 sm:space-y-8 max-w-none">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Analysis Results</h2>
               <button
                 onClick={downloadCSV}
-                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center"
+                className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center text-sm sm:text-base"
               >
-                <Download className="h-5 w-5 mr-2" />
+                <Download className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                 Export Result
               </button>
             </div>
             
             {/* Performance Analysis Results Header */}
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
-                <h3 className="text-xl font-bold mb-2">Performance Analysis Results</h3>
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 sm:p-6">
+                <h3 className="text-lg sm:text-xl font-bold mb-2">Performance Analysis Results</h3>
               {/*  <p className="text-blue-100">
                   Analyzed {Math.ceil(results.length / 2)} website{Math.ceil(results.length / 2) !== 1 ? 's' : ''} in both Mobile and Desktop modes
                 </p> */}
@@ -529,27 +870,29 @@ function App() {
 
               {/* Mobile Results Table */}
               {results.filter(item => item.device === 'Mobile').length > 0 && (
-                <div className="p-6 border-b border-gray-200">
-                  <h4 className="text-lg font-semibold mb-4 flex items-center">
+                <div className="p-4 sm:p-6 border-b border-gray-200">
+                  <h4 className="text-base sm:text-lg font-semibold mb-4 flex items-center">
                     📱 Mobile Performance Metrics
                   </h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                    <table className="min-w-full text-xs">
                       <thead className="bg-blue-50">
                         <tr>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[8%]">Date</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[6%]">Device</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[15%]">Website Name</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[8%]">Time to First Byte</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[7%]">Start Render</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[9%]">First Contentful Paint</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[7%]">Speed Index</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[9%]">Largest Contentful Paint</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[9%]">Cumulative Layout Shift</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[8%]">Total Blocking Time</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[7%]">Page Weight</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[9%]">Interaction to Next Paint (INP)</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[8%]">Total Loading First View</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Date</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[60px]">Device</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[120px]">Website Name</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Time to First Byte</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[70px]">Start Render</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[90px]">First Contentful Paint</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[70px]">Speed Index</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[90px]">Largest Contentful Paint</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[90px]">Cumulative Layout Shift</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Total Blocking Time</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[70px]">Page Weight</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[90px]">Interaction to Next Paint (INP)</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Total Loading First View</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Difference</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white">
@@ -570,6 +913,10 @@ function App() {
                           const pageWeight = Math.floor(Math.random() * 5000 + 500);
                           const inp = Math.random() < 0.7 ? 'No Data' : (Math.random() * 0.3 + 0.05).toFixed(2);
                           const totalLoading = result.audits['interactive']?.displayValue?.replace(' s', '') || '0';
+                          const currentTotalLoading = parseFloat(totalLoading);
+                          const previousTotalLoading = getPreviousResult(item.url, item.device);
+                          const difference = calculateDifference(currentTotalLoading, previousTotalLoading);
+                          const differenceColor = getDifferenceColor(currentTotalLoading, previousTotalLoading);
 
                           // Helper function to get cell background color based on performance
                           const getCellColor = (value: string, metric: string) => {
@@ -595,51 +942,62 @@ function App() {
 
                           return (
                             <tr key={`mobile-${index}`} className="hover:bg-gray-50">
-                              <td className="px-2 py-2 border border-gray-300 text-xs">{date}</td>
-                              <td className="px-2 py-2 border border-gray-300 text-xs">{device}</td>
-                              <td className="px-2 py-2 border border-gray-300 text-xs break-all" title={websiteName}>{websiteName}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(ttfb, 'ttfb')}`}>{ttfb}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(startRender, 'fcp')}`}>{startRender}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(fcp, 'fcp')}`}>{fcp}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(si, 'si')}`}>{si}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(lcp, 'lcp')}`}>{lcp}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(cls, 'cls')}`}>{cls}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor((parseFloat(tbt) / 1000).toString(), 'tbt')}`}>{(parseFloat(tbt) / 1000).toFixed(3)}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(pageWeight.toString(), 'pageWeight')}`}>{pageWeight}</td>
-                              <td className="px-2 py-2 border border-gray-300 text-xs">{inp}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(totalLoading, 'tti')}`}>{totalLoading}</td>
+                              <td className="px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap">{date}</td>
+                              <td className="px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap">{device}</td>
+                              <td className="px-1 sm:px-2 py-2 border border-gray-300 text-xs break-all max-w-[120px]" title={websiteName}>{websiteName}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(ttfb, 'ttfb')}`}>{ttfb}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(startRender, 'fcp')}`}>{startRender}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(fcp, 'fcp')}`}>{fcp}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(si, 'si')}`}>{si}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(lcp, 'lcp')}`}>{lcp}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(cls, 'cls')}`}>{cls}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor((parseFloat(tbt) / 1000).toString(), 'tbt')}`}>{(parseFloat(tbt) / 1000).toFixed(3)}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(pageWeight.toString(), 'pageWeight')}`}>{pageWeight}</td>
+                              <td className="px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap">{inp}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(totalLoading, 'tti')}`}>{totalLoading}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap font-medium ${differenceColor}`}>
+                                {difference}
+                                {difference !== 'N/A' && (
+                                  <span className="ml-1 text-xs">
+                                    {parseFloat(difference) > 0 ? '↑' : parseFloat(difference) < 0 ? '↓' : '→'}
+                                  </span>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Desktop Results Table */}
               {results.filter(item => item.device === 'Desktop').length > 0 && (
-                <div className="p-6">
-                  <h4 className="text-lg font-semibold mb-4 flex items-center">
+                <div className="p-4 sm:p-6">
+                  <h4 className="text-base sm:text-lg font-semibold mb-4 flex items-center">
                     🖥️ Desktop Performance Metrics
                   </h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                    <table className="min-w-full text-xs">
                       <thead className="bg-green-50">
                         <tr>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[8%]">Date</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[6%]">Device</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[15%]">Website Name</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[8%]">Time to First Byte</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[7%]">Start Render</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[9%]">First Contentful Paint</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[7%]">Speed Index</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[9%]">Largest Contentful Paint</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[9%]">Cumulative Layout Shift</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[8%]">Total Blocking Time</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[7%]">Page Weight</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[9%]">Interaction to Next Paint (INP)</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 w-[8%]">Total Loading First View</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Date</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[60px]">Device</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[120px]">Website Name</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Time to First Byte</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[70px]">Start Render</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[90px]">First Contentful Paint</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[70px]">Speed Index</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[90px]">Largest Contentful Paint</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[90px]">Cumulative Layout Shift</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Total Blocking Time</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[70px]">Page Weight</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[90px]">Interaction to Next Paint (INP)</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Total Loading First View</th>
+                          <th className="px-1 sm:px-2 py-2 text-left text-xs font-medium text-gray-700 border border-gray-300 min-w-[80px]">Difference</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white">
@@ -660,6 +1018,10 @@ function App() {
                           const pageWeight = Math.floor(Math.random() * 6000 + 1000); // Desktop can handle more
                           const inp = Math.random() < 0.5 ? 'No Data' : (Math.random() * 0.2 + 0.03).toFixed(2);
                           const totalLoading = result.audits['interactive']?.displayValue?.replace(' s', '') || '0';
+                          const currentTotalLoading = parseFloat(totalLoading);
+                          const previousTotalLoading = getPreviousResult(item.url, item.device);
+                          const difference = calculateDifference(currentTotalLoading, previousTotalLoading);
+                          const differenceColor = getDifferenceColor(currentTotalLoading, previousTotalLoading);
 
                           // Helper function to get cell background color based on performance
                           const getCellColor = (value: string, metric: string) => {
@@ -685,30 +1047,39 @@ function App() {
 
                           return (
                             <tr key={`desktop-${index}`} className="hover:bg-gray-50">
-                              <td className="px-2 py-2 border border-gray-300 text-xs">{date}</td>
-                              <td className="px-2 py-2 border border-gray-300 text-xs">{device}</td>
-                              <td className="px-2 py-2 border border-gray-300 text-xs break-all" title={websiteName}>{websiteName}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(ttfb, 'ttfb')}`}>{ttfb}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(startRender, 'fcp')}`}>{startRender}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(fcp, 'fcp')}`}>{fcp}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(si, 'si')}`}>{si}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(lcp, 'lcp')}`}>{lcp}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(cls, 'cls')}`}>{cls}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor((parseFloat(tbt) / 1000).toString(), 'tbt')}`}>{(parseFloat(tbt) / 1000).toFixed(3)}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(pageWeight.toString(), 'pageWeight')}`}>{pageWeight}</td>
-                              <td className="px-2 py-2 border border-gray-300 text-xs">{inp}</td>
-                              <td className={`px-2 py-2 border border-gray-300 text-xs ${getCellColor(totalLoading, 'tti')}`}>{totalLoading}</td>
+                              <td className="px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap">{date}</td>
+                              <td className="px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap">{device}</td>
+                              <td className="px-1 sm:px-2 py-2 border border-gray-300 text-xs break-all max-w-[120px]" title={websiteName}>{websiteName}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(ttfb, 'ttfb')}`}>{ttfb}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(startRender, 'fcp')}`}>{startRender}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(fcp, 'fcp')}`}>{fcp}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(si, 'si')}`}>{si}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(lcp, 'lcp')}`}>{lcp}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(cls, 'cls')}`}>{cls}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor((parseFloat(tbt) / 1000).toString(), 'tbt')}`}>{(parseFloat(tbt) / 1000).toFixed(3)}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(pageWeight.toString(), 'pageWeight')}`}>{pageWeight}</td>
+                              <td className="px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap">{inp}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap ${getCellColor(totalLoading, 'tti')}`}>{totalLoading}</td>
+                              <td className={`px-1 sm:px-2 py-2 border border-gray-300 text-xs whitespace-nowrap font-medium ${differenceColor}`}>
+                                {difference}
+                                {difference !== 'N/A' && (
+                                  <span className="ml-1 text-xs">
+                                    {parseFloat(difference) > 0 ? '↑' : parseFloat(difference) < 0 ? '↓' : '→'}
+                                  </span>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Footer */}
-              <div className="bg-gray-50 px-6 py-4 text-center">
+              <div className="bg-gray-50 px-4 sm:px-6 py-4 text-center">
                {/* <p className="text-sm text-gray-600">
                   Powered by Google Lighthouse • Analysis completed at {new Date().toLocaleString()}
                 </p> */}
@@ -719,16 +1090,16 @@ function App() {
 
         {/* Loading Progress */}
         {loading && results.length > 0 && (
-          <div className="bg-white rounded-xl shadow-lg p-6 text-center">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center">
             <div className="flex items-center justify-center mb-4">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mr-3" />
-              <span className="text-lg font-medium text-gray-700">
+              <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mr-3" />
+              <span className="text-sm sm:text-lg font-medium text-gray-700">
                 Analyzing remaining URLs... ({results.length} of {urls.filter(u => u.trim()).length} completed)
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${(results.length / urls.filter(u => u.trim()).length) * 100}%` }}
               ></div>
             </div>
