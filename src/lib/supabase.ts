@@ -7,9 +7,20 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 const defaultUrl = 'https://placeholder.supabase.co'
 const defaultKey = 'placeholder-key'
 
+// Check if we have valid Supabase credentials
+const hasValidCredentials = supabaseUrl && supabaseAnonKey && 
+  supabaseUrl !== defaultUrl && supabaseAnonKey !== defaultKey
+
 export const supabase = createClient(
   supabaseUrl || defaultUrl, 
-  supabaseAnonKey || defaultKey
+  supabaseAnonKey || defaultKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: hasValidCredentials,
+      detectSessionInUrl: hasValidCredentials
+    }
+  }
 )
 
 export type Profile = {

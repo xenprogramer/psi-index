@@ -23,27 +23,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      }
-      setLoading(false)
-    })
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('Session error:', error)
+          setLoading(false)
+          return
+        }
+        
         setSession(session)
         setUser(session?.user ?? null)
         
         if (session?.user) {
           await fetchProfile(session.user.id)
-        } else {
-          setProfile(null)
         }
+      } catch (error) {
+        console.error('Auth initialization error:', error)
+      } finally {
         setLoading(false)
+      }
+    }
+
+    initializeAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        try {
+          setSession(session)
+          setUser(session?.user ?? null)
+          
+          if (session?.user) {
+            await fetchProfile(session.user.id)
+          } else {
+            setProfile(null)
+          }
+        } catch (error) {
+          console.error('Auth state change error:', error)
+        } finally {
+          setLoading(false)
+        }
       }
     )
 
@@ -52,6 +73,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000)
+      )
+      
+      const fetchPromise = supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching profile:', error)
+        // Create a basic profile if fetch fails
+        setProfile({
+          id: userId,
+          email: user?.email || '',
+          full_name: user?.email?.split('@')[0] || 'User',
+          avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.email || 'user')}`,
+          created_at: new Date().toISOString()
+        })
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -65,9 +109,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data) {
         setProfile(data)
+      } else {
+        // Create a basic profile if no data
+        setProfile({
+          id: userId,
+          email: user?.email || '',
+          full_name: user?.email?.split('@')[0] || 'User',
+          avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.email || 'user')}`,
+          created_at: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error('Error fetching profile:', error)
+      // Create a basic profile on error
+      setProfile({
+        id: userId,
+        email: user?.email || '',
+        full_name: user?.email?.split('@')[0] || 'User',
+        avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.email || 'user')}`,
+        created_at: new Date().toISOString()
+      })
     }
   }
 
