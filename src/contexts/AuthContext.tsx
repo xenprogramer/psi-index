@@ -96,15 +96,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.email || 'user')}`,
           created_at: new Date().toISOString()
         })
-      }
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error)
         return
       }
 
