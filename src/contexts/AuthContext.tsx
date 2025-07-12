@@ -96,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.email || 'user')}`,
           created_at: new Date().toISOString()
         })
+      }
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
